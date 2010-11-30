@@ -62,7 +62,7 @@ estimateBy progress corpus = do
           normCorpus = normalizeTrainCorpus trainCorpus
           nFeatures = M.size intFeatureMapping
           fVals = featureValues normCorpus nFeatures
-          params = LBFGSParameters DefaultLineSearch Nothing
+          params = LBFGSParameters (Just 1) 1e-7 DefaultLineSearch Nothing
           lbfgsData = EstimateData normCorpus fVals
           n2f = numbersToFeatures featureMapping
 
