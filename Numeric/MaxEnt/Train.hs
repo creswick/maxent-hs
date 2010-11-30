@@ -15,6 +15,8 @@ import Data.Vector ((!))
 import qualified Data.Vector.Generic.Mutable as GM
 import Foreign.C.Types (CDouble, CInt)
 import Numeric.LBFGS
+import System.IO (stderr)
+import Text.Printf
 
 import Numeric.MaxEnt
 
@@ -190,10 +192,10 @@ progress_verbose :: a -> StorableArray Int CDouble ->
                     StorableArray Int CDouble -> CDouble -> CDouble ->
                     CDouble -> CDouble -> CInt -> CInt ->
                     CInt -> IO (CInt)
-progress_verbose _ x _ fx _ _ _ _ k _ = do
-  x0 <- readArray x 0
-  putStr $ show(k) ++ " : "
-  putStr $ "fx = " ++ show(fx) ++ "\n"
+progress_verbose _ _ _ fx xnorm gnorm _ _ k _ = do
+  hPrintf stderr "%d\t%.4e\t%.4e\t%.4e\n" (fromIntegral k :: Int)
+              (realToFrac fx :: Double) (realToFrac xnorm :: Double)
+              (realToFrac gnorm :: Double)
   return 0
 
 -- corpus = [ Context [
