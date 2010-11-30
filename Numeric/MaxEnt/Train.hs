@@ -14,8 +14,7 @@ import qualified Data.Vector.Generic as G
 import Data.Vector ((!))
 import qualified Data.Vector.Generic.Mutable as GM
 import Foreign.C.Types (CDouble, CInt)
-import Numeric.LBFGS (LBFGSResult(..), LineSearchAlgorithm(..),
-                      ProgressFun, lbfgs)
+import Numeric.LBFGS
 
 import Numeric.MaxEnt
 
@@ -51,18 +50,19 @@ estimate = estimateBy progress_verbose
 estimateBy :: Ord a => ProgressFun EstimateData -> [Context a] ->
               IO (Either LBFGSResult (M.Map a Double))
 estimateBy progress corpus = do
-  (r, params) <- lbfgs DefaultLineSearch maxent_evaluate
+  (r, weights) <- lbfgs params maxent_evaluate
                  progress lbfgsData $ take nFeatures $ repeat 0.0
   return $ case r of
-             Success          -> Right $ n2f params
-             Stop             -> Right $ n2f params
-             AlreadyMinimized -> Right $ n2f params
+             Success          -> Right $ n2f weights
+             Stop             -> Right $ n2f weights
+             AlreadyMinimized -> Right $ n2f weights
              _                -> Left  r
     where (trainCorpus, featureMapping@(FeatureIntMapping _ intFeatureMapping)) =
               toTrainCorpus corpus
           normCorpus = normalizeTrainCorpus trainCorpus
           nFeatures = M.size intFeatureMapping
           fVals = featureValues normCorpus nFeatures
+          params = LBFGSParameters DefaultLineSearch Nothing
           lbfgsData = EstimateData normCorpus fVals
           n2f = numbersToFeatures featureMapping
 
