@@ -9,9 +9,9 @@ import Data.Array.Storable (StorableArray, readArray, writeArray)
 import Data.Either
 import qualified Data.Map as M
 import qualified Data.Set as S
-import qualified Data.Vector as V
+import qualified Data.Vector.Unboxed as V
 import qualified Data.Vector.Generic as G
-import Data.Vector ((!))
+import Data.Vector.Unboxed ((!))
 import qualified Data.Vector.Generic.Mutable as GM
 import Foreign.C.Types (CDouble, CInt)
 import Numeric.LBFGS
