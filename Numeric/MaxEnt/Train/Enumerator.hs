@@ -6,6 +6,8 @@
 -- Maintainer  : Daniël de Kok <me@danieldk.eu>
 -- Stability   : experimental
 
+{-# LANGUAGE BangPatterns #-}
+
 module Numeric.MaxEnt.Train.Enumerator (toTrainCorpus) where
 
 import Data.Enumerator hiding (isEOF, length, map)
@@ -17,7 +19,7 @@ import Numeric.MaxEnt.Train.Internal
 toTrainCorpus :: (Monad m, Ord a) =>
             Iteratee (Context a) m (TrainCorpus a)
 toTrainCorpus = liftI $ step emptyMapping where
-    step acc chunk = case chunk of
+    step acc@(FeatureMapping !i !f n, !corpus) chunk = case chunk of
                        Chunks [] -> Continue $ returnI . step acc
                        Chunks xs -> Continue $ returnI .
                                     (step $ ctxsToNum acc xs)
