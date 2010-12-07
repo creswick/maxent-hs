@@ -128,7 +128,7 @@ normalizeTrainCorpus ctxs = map (normalizeCtx (scoreSum ctxs)) ctxs
 
 
 toTrainCorpus :: Ord a => [Context a] -> TrainCorpus a
-toTrainCorpus ctxs = TrainCorpus mapping corpus
+toTrainCorpus ctxs = TrainCorpus mapping (normalizeTrainCorpus corpus)
     where (mapping, corpus) = ctxsToNum emptyMapping ctxs
 
 -- Calculate the empirical value of features.
