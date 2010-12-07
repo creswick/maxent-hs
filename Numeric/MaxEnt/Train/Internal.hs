@@ -40,7 +40,7 @@ data TrainEvent = TrainEvent {
 } deriving (Show)
 
 emptyMapping :: (FeatureMapping a, [TrainContext])
-emptyMapping = (FeatureMapping M.empty M.empty (-1), [])
+emptyMapping = (FeatureMapping M.empty M.empty (0), [])
 
 ctxsToNum :: Ord a => (FeatureMapping a, [TrainContext]) -> [Context a] ->
              (FeatureMapping a, [TrainContext])
@@ -68,10 +68,10 @@ fToNum :: Ord a => (FeatureMapping a, [(Int, Double)]) -> (a, Double) ->
 fToNum (m@(FeatureMapping fInt intF count), acc) (f, val) =
     case M.lookup f fInt of
       Just i -> (m, (i, val):acc)
-      Nothing -> (newMapping, (newCount, val):acc)
+      Nothing -> (newMapping, (count, val):acc)
           where newCount = count + 1
-                newMapping = FeatureMapping (M.insert f newCount fInt)
-                                            (M.insert newCount f intF)
+                newMapping = FeatureMapping (M.insert f count fInt)
+                                            (M.insert count f intF)
                                             newCount
 
 sumScores :: [Event a] -> Double 

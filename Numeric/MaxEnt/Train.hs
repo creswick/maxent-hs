@@ -37,17 +37,18 @@ data EstimateData = EstimateData [TrainContext] FeatureValues
 -- | 
 -- Estimate maximum entropy model parameters. Uses the `progress_verbose`
 -- function to report on progress.
-estimate :: Ord a => TrainCorpus a -> Int ->
-            IO (Either LBFGSResult (M.Map a Double))
+estimate :: Ord a => TrainCorpus a -> IO (Either LBFGSResult (M.Map a Double))
 estimate = estimateBy progress_verbose
 
 -- |
 -- Estimate maximum entropy model parameters.
-estimateBy :: Ord a => ProgressFun EstimateData -> TrainCorpus a -> Int ->
+estimateBy :: Ord a => ProgressFun EstimateData -> TrainCorpus a ->
               IO (Either LBFGSResult (M.Map a Double))
-estimateBy progress (TrainCorpus featureMapping corpus) nFeatures = do
+estimateBy progress (TrainCorpus
+                     featureMapping@(FeatureMapping _ _ nFeatures)
+                     corpus) = do
   (r, weights) <- lbfgs params maxent_evaluate
-                 progress lbfgsData $ take nFeatures $ repeat 0.0
+                  progress lbfgsData $ take nFeatures $ repeat 0.0
   return $ case r of
              Success          -> Right $ n2f weights
              Stop             -> Right $ n2f weights
