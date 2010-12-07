@@ -80,8 +80,8 @@ featureValues ctxs n = runST $ do
   v <- GM.replicate n 0.0
   forM_ ctxs (fvCtx v)
   G.unsafeFreeze v
-    where fvCtx v (TrainContext _ evts) = forM_ evts (fvEvt v)
-          fvEvt v (TrainEvent p fVals) = forM_ fVals (fvMap v p) 
+    where fvCtx v (TrainContext _ evts) = mapM_ (fvEvt v) evts
+          fvEvt v (TrainEvent p fVals) = mapM_ (fvMap v p) fVals
           fvMap v p (feature, value) = do
                           cur <- GM.unsafeRead v feature
                           GM.unsafeWrite v feature (cur + p * value)
