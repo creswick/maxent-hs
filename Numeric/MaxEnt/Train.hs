@@ -1,7 +1,7 @@
 module Numeric.MaxEnt.Train (EstimateData(..), FeatureValues, TrainCorpus(..),
                              TrainContext(..), TrainEvent(..), estimate,
                              estimateBy, progress_silent,
-                             progress_verbose) where
+                             progress_verbose, toTrainCorpus) where
 
 import Control.Monad (forM_, foldM, liftM, mapM, liftM)
 import Control.Monad.ST (runST)
@@ -20,7 +20,7 @@ import Text.Printf
 
 import Numeric.MaxEnt
 
-type TrainCorpus = [TrainContext]
+data TrainCorpus a = TrainCorpus (FeatureMapping a) [TrainContext]
 
 data TrainContext = TrainContext {
       trainCtxP      :: Double,
@@ -34,24 +34,28 @@ data TrainEvent = TrainEvent {
 
 type FeatureValues = V.Vector Double
 
-data FeatureIntMapping a = FeatureIntMapping (M.Map a Int) (M.Map Int a)
-                           deriving Show
+data FeatureMapping a = FeatureMapping {
+      featureInt   :: M.Map a Int,
+      intFeature   :: M.Map Int a,
+      featureCount :: Int
+}
 
 -- | Data that is required during optimization.
-data EstimateData = EstimateData TrainCorpus FeatureValues
+data EstimateData = EstimateData [TrainContext] FeatureValues
     deriving Show
 
 -- | 
 -- Estimate maximum entropy model parameters. Uses the `progress_verbose`
 -- function to report on progress.
-estimate :: Ord a => [Context a] -> IO (Either LBFGSResult (M.Map a Double))
+estimate :: Ord a => TrainCorpus a -> Int ->
+            IO (Either LBFGSResult (M.Map a Double))
 estimate = estimateBy progress_verbose
 
 -- |
 -- Estimate maximum entropy model parameters.
-estimateBy :: Ord a => ProgressFun EstimateData -> [Context a] ->
+estimateBy :: Ord a => ProgressFun EstimateData -> TrainCorpus a -> Int ->
               IO (Either LBFGSResult (M.Map a Double))
-estimateBy progress corpus = do
+estimateBy progress (TrainCorpus featureMapping corpus) nFeatures = do
   (r, weights) <- lbfgs params maxent_evaluate
                  progress lbfgsData $ take nFeatures $ repeat 0.0
   return $ case r of
@@ -59,18 +63,52 @@ estimateBy progress corpus = do
              Stop             -> Right $ n2f weights
              AlreadyMinimized -> Right $ n2f weights
              _                -> Left  r
-    where (trainCorpus, featureMapping@(FeatureIntMapping _ intFeatureMapping)) =
-              toTrainCorpus corpus
-          normCorpus = normalizeTrainCorpus trainCorpus
-          nFeatures = M.size intFeatureMapping
-          fVals = featureValues normCorpus nFeatures
+    where fVals = featureValues corpus nFeatures
           params = LBFGSParameters (Just 1) 1e-7 DefaultLineSearch Nothing
-          lbfgsData = EstimateData normCorpus fVals
+          lbfgsData = EstimateData corpus fVals
           n2f = numbersToFeatures featureMapping
 
-numbersToFeatures :: Ord a => FeatureIntMapping a -> [Double] ->
+emptyMapping :: (FeatureMapping a, [TrainContext])
+emptyMapping = (FeatureMapping M.empty M.empty (-1), [])
+
+ctxsToNum :: Ord a => (FeatureMapping a, [TrainContext]) -> [Context a] ->
+             (FeatureMapping a, [TrainContext])
+ctxsToNum acc = foldl ctxToNum acc
+
+ctxToNum :: Ord a => (FeatureMapping a, [TrainContext]) -> Context a ->
+            (FeatureMapping a, [TrainContext])
+ctxToNum (m, ctxs) (Context evts) = (newM, TrainContext scoreSum trainEvts:ctxs)
+    where scoreSum = sumScores evts
+          (newM, trainEvts) = foldl evtToNum (m, []) evts
+
+
+evtToNum :: Ord a => (FeatureMapping a, [TrainEvent]) -> Event a ->
+            (FeatureMapping a, [TrainEvent])
+evtToNum (m, evts) (Event score fVals) = (newM, evt:evts)
+    where (newM, newFVals) = fsToNum m fVals
+          evt = TrainEvent score newFVals
+
+fsToNum :: Ord a => FeatureMapping a -> [(a, Double)] ->
+           (FeatureMapping a, [(Int, Double)])
+fsToNum m = foldl fToNum (m, [])
+
+fToNum :: Ord a => (FeatureMapping a, [(Int, Double)]) -> (a, Double) ->
+          (FeatureMapping a, [(Int, Double)])
+fToNum (m@(FeatureMapping fInt intF count), acc) (f, val) =
+    case M.lookup f fInt of
+      Just i -> (m, (i, val):acc)
+      Nothing -> (newMapping, (newCount, val):acc)
+          where newCount = count + 1
+                newMapping = FeatureMapping (M.insert f newCount fInt)
+                                            (M.insert newCount f intF)
+                                            newCount
+
+sumScores :: [Event a] -> Double 
+sumScores = foldl (\acc (Event score _) -> acc + score) 0.0
+
+numbersToFeatures :: Ord a => FeatureMapping a -> [Double] ->
                      M.Map a Double
-numbersToFeatures (FeatureIntMapping _ intToFeatureMapping) weights =
+numbersToFeatures (FeatureMapping _ intToFeatureMapping _) weights =
     foldl insertWeight M.empty indexedWeights
     where indexedWeights = zip [0..] weights
           insertWeight acc (idx, weight) = M.insert f weight acc
@@ -80,7 +118,7 @@ numbersToFeatures (FeatureIntMapping _ intToFeatureMapping) weights =
 
 -- Normalize the scores of a training corpus, giving a real probability
 -- distribution for contexts and events.
-normalizeTrainCorpus :: TrainCorpus -> TrainCorpus
+normalizeTrainCorpus :: [TrainContext] -> [TrainContext]
 normalizeTrainCorpus ctxs = map (normalizeCtx (scoreSum ctxs)) ctxs
     where scoreSum = foldl (\acc (TrainContext score _) -> acc + score) 0.0
           normalizeCtx sum (TrainContext score evts) =
@@ -88,34 +126,13 @@ normalizeTrainCorpus ctxs = map (normalizeCtx (scoreSum ctxs)) ctxs
           normalizeEvt sum (TrainEvent score fVals) =
               TrainEvent (score / sum) fVals
 
--- Convert a corpus to a training corpus. A training corpus represents
--- features as numbers.
-toTrainCorpus :: Ord a => [Context a] -> (TrainCorpus, FeatureIntMapping a)
-toTrainCorpus ctxs = (map ctxToNum ctxs, fMapping)
-     where fMapping = numberFeatures $ features ctxs
-           (FeatureIntMapping fInt _) = fMapping
-           ctxToNum (Context evts) = TrainContext (sumScores evts) $
-                                     map evtToNum evts
-           evtToNum (Event score fvals) = TrainEvent score $ map mapFs fvals
-           mapFs (f, val) = (M.findWithDefault 0 f fInt, val)
-           sumScores = foldl (\acc (Event score _) -> acc + score) 0.0
 
--- Set of features used in the corpus.
-features :: Ord a => [Context a] -> S.Set a
-features = foldl ctxFs S.empty
-    where ctxFs acc (Context evts)  = foldl evtFs acc evts
-          evtFs acc (Event _ fvals) = foldl mapFs acc fvals
-          mapFs acc (f, _)          = S.insert f acc
-
--- Assign a unique number to each feature.
-numberFeatures :: Ord a => S.Set a -> FeatureIntMapping a
-numberFeatures s = FeatureIntMapping fInt intF
-    where (_, fInt, intF) = S.fold numberFeature (0, M.empty, M.empty) s
-          numberFeature f (cnt, fInt, intF) =
-              (cnt + 1, M.insert f cnt fInt, M.insert cnt f intF)
+toTrainCorpus :: Ord a => [Context a] -> TrainCorpus a
+toTrainCorpus ctxs = TrainCorpus mapping corpus
+    where (mapping, corpus) = ctxsToNum emptyMapping ctxs
 
 -- Calculate the empirical value of features.
-featureValues :: TrainCorpus -> Int -> V.Vector Double
+featureValues :: [TrainContext] -> Int -> V.Vector Double
 featureValues ctxs n = runST $ do
   v <- GM.replicate n 0.0
   forM_ ctxs (fvCtx v)
