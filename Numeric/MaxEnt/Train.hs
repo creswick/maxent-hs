@@ -71,7 +71,7 @@ numbersToFeatures (FeatureMapping _ intToFeatureMapping _) weights =
                           Nothing  -> error "Feature does not occur in mapping."
 
 toTrainCorpus :: Ord a => [Context a] -> TrainCorpus a
-toTrainCorpus ctxs = TrainCorpus mapping (normalizeTrainCorpus corpus)
+toTrainCorpus ctxs = TrainCorpus mapping $ normalizeTrainCorpus corpus
     where (mapping, corpus) = ctxsToNum emptyMapping ctxs
 
 -- Calculate the empirical value of features.
@@ -87,14 +87,14 @@ featureValues ctxs n = runST $ do
                           GM.unsafeWrite v feature (cur + p * value)
 
 pyxs :: StorableArray Int CDouble -> TrainContext -> IO [Double]
-pyxs v (TrainContext _ evts) = do
+pyxs x (TrainContext _ evts) = do
   s <- sums
   let z = sum s
   return $ map (/ z) s
     where sums = mapM calcSum evts
           calcSum (TrainEvent _ fVals) = liftM exp $ foldM calcSum_ 0.0 fVals
           calcSum_ acc (feature, val) = do
-               w <- readArray v feature
+               w <- readArray x feature
                return $ acc + ((realToFrac w) * val)
 
 maxent_evaluate :: EstimateData -> StorableArray Int CDouble ->

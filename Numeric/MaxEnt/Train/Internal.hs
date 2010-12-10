@@ -82,7 +82,7 @@ sumScores = foldl (\acc (Event score _) -> acc + score) 0.0
 normalizeTrainCorpus :: [TrainContext] -> [TrainContext]
 normalizeTrainCorpus ctxs = map (normalizeCtx (scoreSum ctxs)) ctxs
     where scoreSum = foldl (\acc (TrainContext score _) -> acc + score) 0.0
-          normalizeCtx sum (TrainContext score evts) =
-              TrainContext (score / sum) $ map (normalizeEvt sum) evts
-          normalizeEvt sum (TrainEvent score fVals) =
-              TrainEvent (score / sum) fVals
+          normalizeCtx ctxSum (TrainContext score evts) =
+              TrainContext (score / ctxSum) $ map (normalizeEvt ctxSum) evts
+          normalizeEvt ctxSum (TrainEvent score fVals) =
+              TrainEvent (score / ctxSum) fVals
