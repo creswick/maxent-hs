@@ -19,7 +19,7 @@ import Numeric.MaxEnt.Train.Internal
 toTrainCorpus :: (Monad m, Ord a) =>
             Iteratee (Context a) m (TrainCorpus a)
 toTrainCorpus = liftI $ step emptyMapping where
-    step acc@(FeatureMapping !i !f n, !corpus) chunk = case chunk of
+    step acc@(FeatureMapping !i !f !n, !corpus) chunk = case chunk of
                        Chunks [] -> Continue $ returnI . step acc
                        Chunks xs -> Continue $ returnI .
                                     (step $ ctxsToNum acc xs)
